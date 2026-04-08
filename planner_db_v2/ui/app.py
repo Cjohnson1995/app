@@ -309,6 +309,69 @@ def _sqlite_tables(conn: sqlite3.Connection) -> list[str]:
     return [r[0] for r in conn.execute("select name from sqlite_master where type='table';").fetchall()]
 
 
+# --- DB core table presence and empty frame helpers ---
+def db_has_core_tables(required: Sequence[str] | None = None) -> bool:
+    required = list(required or ["main_line", "main_targets", "sub_object", "sub_plan", "peg_sub", "op_hours"])
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(DB_PATH) as conn:
+        existing = set(_sqlite_tables(conn))
+    return set(required).issubset(existing)
+
+
+def empty_mains_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "main_id",
+            "delivery",
+            "customer",
+            "parent_part",
+            "parent_wo",
+            "parent_wo_norm",
+            "bu",
+            "type",
+            "due_date",
+            "dock_date",
+            "wo_qty",
+            "line_value",
+            "short_free",
+            "assy_date",
+            "test_date",
+            "stock_date",
+            "assy_emp",
+            "test_emp",
+        ]
+    )
+
+
+def empty_main_hours_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=["wo_norm", "assy_hrs", "test_hrs"])
+
+
+def empty_sub_hours_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=["source_digits", "assy_hrs", "test_hrs"])
+
+
+def empty_subs_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "sub_key",
+            "sub_part",
+            "sub_source",
+            "source_digits",
+            "sub_resp",
+            "sub_eta_date",
+            "sub_desc",
+            "rem_ops",
+            "clear_date",
+            "assy_date",
+            "test_date",
+            "stock_date",
+            "assy_emp",
+            "test_emp",
+        ]
+    )
+
+
 @st.cache_data(show_spinner=False)
 def detect_dept_labor_source() -> dict:
     """Detect the Dept Labor table/columns in the SQLite DB.
@@ -643,6 +706,8 @@ def validate_employee_for_part(part: str | None, area: str, emp: str | None) -> 
 # --- New helper: Get BU options for filtering ---
 @st.cache_data(show_spinner=False)
 def get_bu_options() -> list[str]:
+    if not db_has_core_tables(["main_line"]):
+        return []
     df = read_sql(
         """
         select distinct trim(bu) as bu
@@ -656,6 +721,8 @@ def get_bu_options() -> list[str]:
 
 
 def mains_core(filters: dict) -> pd.DataFrame:
+    if not db_has_core_tables(["main_line", "main_targets"]):
+        return empty_mains_df()
     return read_sql(
         """
         select
@@ -714,6 +781,8 @@ def style_short_free_green(df: pd.DataFrame):
     return df.style.apply(_row_style, axis=1)
 
 def hours_rollup_for_mains() -> pd.DataFrame:
+    if not db_has_core_tables(["op_hours"]):
+        return empty_main_hours_df()
     # Aggregate hours at WO grain using normalized WO (handles (K) mismatch)
     # ASSY = ASM or ASSY; TEST = listed; ignore FASY.
     ctrs_test = tuple(sorted(TEST_CTRS))
@@ -733,6 +802,8 @@ def hours_rollup_for_mains() -> pd.DataFrame:
 
 
 def hours_rollup_for_subs() -> pd.DataFrame:
+    if not db_has_core_tables(["op_hours"]):
+        return empty_sub_hours_df()
     # For subs we join on digits extracted from Comp Source -> wo_pl_digits
     ctrs_test = tuple(sorted(TEST_CTRS))
     ctrs_assy = tuple(sorted(ASSY_CTRS))
@@ -752,6 +823,8 @@ def hours_rollup_for_subs() -> pd.DataFrame:
 
 
 def subs_for_main(main_id: int) -> pd.DataFrame:
+    if not db_has_core_tables(["peg_sub", "sub_object", "sub_plan"]):
+        return empty_subs_df()
     # "Comp. Remaining" from BU Shortages Details is stored on the sub object table when available.
     # We keep this backwards-compatible in case refresh_v2.py/db schema doesn't yet have the column.
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -799,6 +872,8 @@ def subs_for_main(main_id: int) -> pd.DataFrame:
 
 
 def pegged_mains_for_sub(sub_key: str) -> pd.DataFrame:
+    if not db_has_core_tables(["peg_sub", "main_line", "main_targets"]):
+        return pd.DataFrame(columns=["delivery", "customer", "parent_part", "parent_wo", "due_date", "wo_qty", "line_value", "stock_date"])
     # show which mains this sub impacts + value + due date (your priority decision support)
     return read_sql(
         """
@@ -896,6 +971,9 @@ with tabs[0]:
     st.subheader("Mains (Sales Line × WO)")
 
     mains = mains_core(filters)
+    if mains.empty:
+        st.info("No main planner data is loaded in this deployment yet. Run your refresh/import job to populate main_line and related tables.")
+        st.stop()
 
     # attach hours rollups
     h_main = hours_rollup_for_mains()
@@ -1517,6 +1595,9 @@ with tabs[0]:
 # -------------
 with tabs[1]:
     st.subheader("Subs (global)")
+    if not db_has_core_tables(["sub_object", "sub_plan", "peg_sub"]):
+        st.info("No sub planner data is loaded in this deployment yet. Run your refresh/import job to populate sub_object, peg_sub, and related tables.")
+        st.stop()
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as _c:
@@ -1792,6 +1873,9 @@ with tabs[1]:
 # -------------
 with tabs[2]:
     st.subheader("Dashboards")
+    if not db_has_core_tables(["main_line", "main_targets"]):
+        st.info("Dashboards are waiting for planner source data. Run your refresh/import job to populate the deployed database.")
+        st.stop()
 
     dash_tabs = st.tabs([
         "Revenue by Stock Date",
