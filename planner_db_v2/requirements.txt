@@ -1,0 +1,31 @@
+# --- Core App ---
+streamlit==1.33.0
+
+# --- Data Processing ---
+pandas==2.2.2
+numpy==1.26.4
+
+# --- Excel / File Handling ---
+openpyxl==3.1.2
+
+# --- Database (Postgres) ---
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.29
+
+# --- Optional: Better performance / parquet support ---
+pyarrow==15.0.2
+
+# --- Date Handling ---
+python-dateutil==2.9.0
+
+# --- Environment / Config ---
+python-dotenv==1.0.1
+
+# --- Visualization (if you use charts) ---
+plotly==5.20.0
+
+# --- Streamlit enhancements ---
+streamlit-aggrid==0.3.4.post3
+
+# --- Logging / Debugging ---
+loguru==0.7.2
