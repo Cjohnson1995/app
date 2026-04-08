@@ -28,6 +28,16 @@ def _table_cols(conn: sqlite3.Connection, table: str) -> set[str]:
     return {r[1] for r in conn.execute(f"PRAGMA table_info({table});").fetchall()}
 
 
+def _has_table(conn: sqlite3.Connection, name: str) -> bool:
+    return (
+        conn.execute(
+            "select 1 from sqlite_master where type='table' and name=?;",
+            (name,),
+        ).fetchone()
+        is not None
+    )
+
+
 # Helper to check if a table has a given column
 def has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
     try:
@@ -297,16 +307,6 @@ def exec_many(sql: str, rows: Sequence[tuple]):
 
 def _sqlite_tables(conn: sqlite3.Connection) -> list[str]:
     return [r[0] for r in conn.execute("select name from sqlite_master where type='table';").fetchall()]
-
-# Helper: check if a table exists in the SQLite DB
-def _has_table(conn: sqlite3.Connection, name: str) -> bool:
-    return (
-        conn.execute(
-            "select 1 from sqlite_master where type='table' and name=?;",
-            (name,),
-        ).fetchone()
-        is not None
-    )
 
 
 @st.cache_data(show_spinner=False)
