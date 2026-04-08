@@ -30,4 +30,8 @@ streamlit-aggrid==0.3.4.post3
 # --- Logging / Debugging ---
 loguru==0.7.2
 
+streamlit
+pandas
 openpyxl
+numpy
+python-dateutil
