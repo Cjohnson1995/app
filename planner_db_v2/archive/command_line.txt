@@ -1,0 +1,126 @@
+PLANNER_DB_V2 – LOCAL RUNBOOK (ERROR-SAFE)
+=======================================
+
+This guide runs commands in the correct order to prevent environment and dependency errors.
+All steps are LOCAL ONLY.
+
+--------------------------------------------------
+STEP 0) OPEN TERMINAL & GO TO PROJECT
+--------------------------------------------------
+cd ~/planner_db_v2
+
+--------------------------------------------------
+STEP 1) ACTIVATE VIRTUAL ENVIRONMENT (REQUIRED)
+--------------------------------------------------
+source ~/planner_db_v2/.venv/bin/activate
+
+Verify you see (.venv) in the prompt.
+Verify Python:
+python --version
+
+--------------------------------------------------
+STEP 2) INSTALL / VERIFY REQUIRED DEPENDENCIES
+--------------------------------------------------
+Run ONCE when creating a new virtual environment, or after Python upgrades. (This installs Streamlit too.)
+
+pip install --upgrade pip
+# If you have a requirements.txt, prefer this:
+# pip install -r requirements.txt
+
+pip install streamlit pandas openpyxl altair
+
+Verify Excel engine:
+python -c "import openpyxl; print('openpyxl OK')"
+
+--------------------------------------------------
+STEP 3) VERIFY INCOMING DATA FILES
+--------------------------------------------------
+Confirm these files exist:
+~/planner_db_v2/incoming/
+
+- BU Shortages Export - Details.xlsx
+- Scheduled Hours - Sheet1.xlsx
+- DeptLbr2026.xlsx
+
+(Optional quick check)
+ls ~/planner_db_v2/incoming/
+
+--------------------------------------------------
+STEP 4) REFRESH DATABASE (RUN DAILY)
+--------------------------------------------------
+IMPORTANT: Do NOT try to run the .db file directly.
+
+Correct command:
+python ~/planner_db_v2/scripts/refresh_v2.py
+
+Expected success message:
+"Refresh complete"
+
+--------------------------------------------------
+STEP 5) START STREAMLIT (LOCAL ONLY – SAFEST)
+--------------------------------------------------
+Only accessible from THIS computer:
+
+python -m streamlit run ~/planner_db_v2/ui/app.py
+
+Open browser:
+http://localhost:8501
+
+--------------------------------------------------
+STEP 6) START STREAMLIT (WIFI / LAN DEMO MODE)
+--------------------------------------------------
+Accessible to anyone on the SAME WIFI / LAN network.
+Use this when multiple colleagues need to open the app at the same time.
+NOTE: There is no authentication yet; anyone on that network can access.
+For safety, use a trusted network and stop Streamlit when finished.
+
+python -m streamlit run ~/planner_db_v2/ui/app.py \
+  --server.address 192.168.1.141 \
+  --server.port 8500
+
+Find your local IP:
+ipconfig getifaddr en0
+
+Share this link:
+http://<YOUR_LOCAL_IP>:8501
+
+Multi-user notes:
+- Multiple users can VIEW concurrently with no issue.
+- If multiple users EDIT at the same time, the last save wins and you may overwrite each other.
+- Recommended for team use: agree on editing ownership (one editor), or add read-only mode / authentication later.
+- If the office WiFi is a guest network with client isolation, devices may NOT be able to reach your Mac.
+
+--------------------------------------------------
+STEP 7) STOP STREAMLIT
+--------------------------------------------------
+In the terminal running Streamlit:
+CTRL + C
+
+--------------------------------------------------
+COMMON ERRORS & FIXES
+--------------------------------------------------
+ERROR: ModuleNotFoundError: openpyxl
+FIX:
+pip install openpyxl
+
+ERROR: permission denied: planner_v2.db
+CAUSE:
+Tried to execute the database file.
+FIX:
+Only run python scripts, never the .db file.
+
+ERROR: Others cannot access app on WIFI
+CHECK:
+- Same WIFI network
+- Not on guest network
+- macOS firewall allows Python
+
+--------------------------------------------------
+NOTES
+--------------------------------------------------
+- App runs 100% locally
+- No cloud hosting
+- No authentication yet
+- Closing Streamlit immediately cuts off access
+- Nightly refresh may remove completed orders
+- Safe to share internally
