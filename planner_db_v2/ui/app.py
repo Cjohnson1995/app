@@ -44,41 +44,90 @@ def ensure_schema():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys=ON;")
 
-        # main_targets: add assy_emp/test_emp if missing
-        cols = _table_cols(conn, "main_targets")
-        if "assy_emp" not in cols:
-            conn.execute("ALTER TABLE main_targets ADD COLUMN assy_emp TEXT;")
-        if "test_emp" not in cols:
-            conn.execute("ALTER TABLE main_targets ADD COLUMN test_emp TEXT;")
+        # main_targets: create if missing, otherwise add columns if missing
+        if not _has_table(conn, "main_targets"):
+            conn.execute(
+                """
+                CREATE TABLE main_targets (
+                    main_id INTEGER PRIMARY KEY,
+                    assy_date TEXT,
+                    test_date TEXT,
+                    stock_date TEXT,
+                    assy_emp TEXT,
+                    test_emp TEXT,
+                    updated_at TEXT
+                );
+                """
+            )
+        else:
+            cols = _table_cols(conn, "main_targets")
+            if "assy_date" not in cols:
+                conn.execute("ALTER TABLE main_targets ADD COLUMN assy_date TEXT;")
+            if "test_date" not in cols:
+                conn.execute("ALTER TABLE main_targets ADD COLUMN test_date TEXT;")
+            if "stock_date" not in cols:
+                conn.execute("ALTER TABLE main_targets ADD COLUMN stock_date TEXT;")
+            if "assy_emp" not in cols:
+                conn.execute("ALTER TABLE main_targets ADD COLUMN assy_emp TEXT;")
+            if "test_emp" not in cols:
+                conn.execute("ALTER TABLE main_targets ADD COLUMN test_emp TEXT;")
+            if "updated_at" not in cols:
+                conn.execute("ALTER TABLE main_targets ADD COLUMN updated_at TEXT;")
 
-        # sub_plan: add planning columns if missing
-        cols = _table_cols(conn, "sub_plan")
-        if "clear_date" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN clear_date TEXT;")
-        if "assy_date" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN assy_date TEXT;")
-        if "test_date" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN test_date TEXT;")
-        if "stock_date" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN stock_date TEXT;")
-        if "assy_emp" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN assy_emp TEXT;")
-        if "test_emp" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN test_emp TEXT;")
-        if "status" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN status TEXT;")
-        if "updated_at" not in cols:
-            conn.execute("ALTER TABLE sub_plan ADD COLUMN updated_at TEXT;")
+        # sub_plan: create if missing, otherwise add planning columns if missing
+        if not _has_table(conn, "sub_plan"):
+            conn.execute(
+                """
+                CREATE TABLE sub_plan (
+                    sub_key TEXT PRIMARY KEY,
+                    clear_date TEXT,
+                    assy_date TEXT,
+                    test_date TEXT,
+                    stock_date TEXT,
+                    assy_emp TEXT,
+                    test_emp TEXT,
+                    status TEXT,
+                    updated_at TEXT
+                );
+                """
+            )
+        else:
+            cols = _table_cols(conn, "sub_plan")
+            if "clear_date" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN clear_date TEXT;")
+            if "assy_date" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN assy_date TEXT;")
+            if "test_date" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN test_date TEXT;")
+            if "stock_date" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN stock_date TEXT;")
+            if "assy_emp" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN assy_emp TEXT;")
+            if "test_emp" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN test_emp TEXT;")
+            if "status" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN status TEXT;")
+            if "updated_at" not in cols:
+                conn.execute("ALTER TABLE sub_plan ADD COLUMN updated_at TEXT;")
 
-        # main_line: add short_free if missing
-        cols = _table_cols(conn, "main_line")
-        if "short_free" not in cols:
-            conn.execute("ALTER TABLE main_line ADD COLUMN short_free INTEGER DEFAULT 0;")
+        # main_line: add short_free if missing (only if table exists)
+        if _has_table(conn, "main_line"):
+            cols = _table_cols(conn, "main_line")
+            if "short_free" not in cols:
+                conn.execute("ALTER TABLE main_line ADD COLUMN short_free INTEGER DEFAULT 0;")
 
-        # sub_object: add comp_remaining (BU "Comp. Remaining") if missing
-        cols = _table_cols(conn, "sub_object")
-        if "comp_remaining" not in cols:
-            conn.execute("ALTER TABLE sub_object ADD COLUMN comp_remaining TEXT;")
+        # sub_object: add comp_remaining (BU "Comp. Remaining") if missing (only if table exists)
+        if _has_table(conn, "sub_object"):
+            cols = _table_cols(conn, "sub_object")
+            if "comp_remaining" not in cols:
+                conn.execute("ALTER TABLE sub_object ADD COLUMN comp_remaining TEXT;")
+        missing_core = [t for t in ["main_line", "sub_object", "peg_sub", "op_hours"] if not _has_table(conn, t)]
+        if missing_core:
+            st.warning(
+                "Planner source tables are missing in this deployed database: "
+                + ", ".join(missing_core)
+                + ". Run your refresh/import process to load production data."
+            )
 
         conn.commit()
 
