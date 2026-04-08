@@ -144,11 +144,6 @@ def ensure_schema():
             )
         conn.commit()
 
-ensure_schema()
-_bootstrapped = bootstrap_data_if_needed()
-if _bootstrapped:
-    ensure_schema()
-st.cache_data.clear()
 
 # -----------------------------
 # Work center rules (must match refresh)
@@ -337,6 +332,12 @@ def db_has_core_tables(required: Sequence[str] | None = None) -> bool:
     with sqlite3.connect(DB_PATH) as conn:
         existing = set(_sqlite_tables(conn))
     return set(required).issubset(existing)
+
+ensure_schema()
+_bootstrapped = bootstrap_data_if_needed()
+if _bootstrapped:
+    ensure_schema()
+st.cache_data.clear()
 
 
 def empty_mains_df() -> pd.DataFrame:
