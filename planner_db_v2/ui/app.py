@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 import os
 import io
+import tempfile
 from typing import Optional, Sequence
 
 import pandas as pd
@@ -17,8 +18,11 @@ import streamlit.components.v1 as components
 # -----------------------------
 # Paths
 # -----------------------------
-BASE = Path.home() / "planner_db_v2"
-DB_PATH = BASE / "db" / "planner_v2.db"
+BASE = Path(__file__).resolve().parent.parent
+DEFAULT_DATA_DIR = Path(tempfile.gettempdir()) / "planner_app"
+DATA_DIR = Path(os.getenv("PLANNER_DATA_DIR", DEFAULT_DATA_DIR))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "planner_v2.db"
 
 def _table_cols(conn: sqlite3.Connection, table: str) -> set[str]:
     return {r[1] for r in conn.execute(f"PRAGMA table_info({table});").fetchall()}
@@ -35,6 +39,8 @@ def has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
 # Ensure schema is up-to-date before anything else
 def ensure_schema():
     """Make UI resilient if refresh_v2.py hasn't been run since new columns were introduced."""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    st.caption(f"Database path: {DB_PATH}")
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys=ON;")
 
@@ -217,11 +223,13 @@ def safe_date_input(label: str, value: Optional[str]):
 
 @st.cache_data(show_spinner=False)
 def read_sql(sql: str, params: dict | tuple = ()) -> pd.DataFrame:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         return pd.read_sql_query(sql, conn, params=params)
 
 
 def exec_sql(sql: str, params: tuple = ()):
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys=ON;")
         conn.execute(sql, params)
@@ -229,6 +237,7 @@ def exec_sql(sql: str, params: tuple = ()):
 
 
 def exec_many(sql: str, rows: Sequence[tuple]):
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys=ON;")
         conn.executemany(sql, rows)
@@ -264,6 +273,7 @@ def detect_dept_labor_source() -> dict:
       table, part_col, emp_col, dept_col, ts_col
     or an empty dict if not found.
     """
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys=ON;")
         tables = _sqlite_tables(conn)
@@ -423,6 +433,7 @@ def get_employee_options_by_area(area: str) -> list[str]:
 # --- New: restricted employee allocation for mains and subs ---
 @st.cache_data(show_spinner=False)
 def _table_cols_cached(table: str) -> set[str]:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         return _table_cols(conn, table)
 
@@ -446,6 +457,7 @@ def get_recent_employee_suggestions(part: str | None, area: str, limit: int = 2)
 
     # 1) Preferred: curated mapping table created during refresh
     try:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute("PRAGMA foreign_keys=ON;")
             if _has_table(conn, "part_recent_employee_dept"):
@@ -693,6 +705,7 @@ def hours_rollup_for_subs() -> pd.DataFrame:
 def subs_for_main(main_id: int) -> pd.DataFrame:
     # "Comp. Remaining" from BU Shortages Details is stored on the sub object table when available.
     # We keep this backwards-compatible in case refresh_v2.py/db schema doesn't yet have the column.
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as _c:
         _c.execute("PRAGMA foreign_keys=ON;")
         if has_column(_c, "sub_object", "comp_remaining"):
@@ -1456,6 +1469,7 @@ with tabs[0]:
 with tabs[1]:
     st.subheader("Subs (global)")
 
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as _c:
         _c.execute("PRAGMA foreign_keys=ON;")
         if has_column(_c, "sub_object", "comp_remaining"):
