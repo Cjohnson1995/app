@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -23,6 +24,9 @@ DEFAULT_DATA_DIR = Path(tempfile.gettempdir()) / "planner_app"
 DATA_DIR = Path(os.getenv("PLANNER_DATA_DIR", DEFAULT_DATA_DIR))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "planner_v2.db"
+
+if str(BASE) not in sys.path:
+    sys.path.append(str(BASE))
 
 def _table_cols(conn: sqlite3.Connection, table: str) -> set[str]:
     return {r[1] for r in conn.execute(f"PRAGMA table_info({table});").fetchall()}
@@ -136,12 +140,14 @@ def ensure_schema():
             st.warning(
                 "Planner source tables are missing in this deployed database: "
                 + ", ".join(missing_core)
-                + ". Run your refresh/import process to load production data."
+                + ". The app will try to load them from the repo refresh files on startup."
             )
-
         conn.commit()
 
 ensure_schema()
+_bootstrapped = bootstrap_data_if_needed()
+if _bootstrapped:
+    ensure_schema()
 st.cache_data.clear()
 
 # -----------------------------
@@ -307,6 +313,21 @@ def exec_many(sql: str, rows: Sequence[tuple]):
 
 def _sqlite_tables(conn: sqlite3.Connection) -> list[str]:
     return [r[0] for r in conn.execute("select name from sqlite_master where type='table';").fetchall()]
+
+def bootstrap_data_if_needed() -> bool:
+    required = ["main_line", "sub_object", "peg_sub", "op_hours"]
+    if db_has_core_tables(required):
+        return False
+
+    try:
+        st.info("Planner data not found. Loading source data from repo files...")
+        from scripts.refresh_v2 import main as run_refresh
+        run_refresh()
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Failed to load planner source data from repo files: {e}")
+        return False
 
 
 # --- DB core table presence and empty frame helpers ---
