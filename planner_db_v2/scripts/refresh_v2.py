@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import sqlite3
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -11,11 +13,19 @@ import pandas as pd
 
 
 # -----------------------------
-# Paths (LOCAL ONLY)
+# Paths
 # -----------------------------
-BASE = Path.home() / "planner_db_v2"
-INCOMING_DIR = BASE / "incoming"
-DB_PATH = BASE / "db" / "planner_v2.db"
+BASE = Path(__file__).resolve().parent.parent
+
+# Keep database path aligned with ui/app.py so refresh and UI use the same SQLite file
+DEFAULT_DATA_DIR = Path(tempfile.gettempdir()) / "planner_app"
+DATA_DIR = Path(os.getenv("PLANNER_DATA_DIR", DEFAULT_DATA_DIR))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "planner_v2.db"
+
+# Excel source files live in the repo under incoming/
+DEFAULT_INCOMING_DIR = BASE / "incoming"
+INCOMING_DIR = Path(os.getenv("PLANNER_INCOMING_DIR", DEFAULT_INCOMING_DIR))
 
 BU_XLSX = INCOMING_DIR / "BU Shortages Export - Details.xlsx"
 HRS_XLSX = INCOMING_DIR / "Scheduled Hours - Sheet1.xlsx"
@@ -104,6 +114,15 @@ def read_export_with_title_row(path: Path, sheet_name: str, required_cols: list[
     df.columns = headers
     df = df.dropna(how="all")
     return df
+
+
+def validate_input_files() -> None:
+    required = [BU_XLSX, HRS_XLSX, LBR_XLSX, SDD_XLSX]
+    missing = [str(p) for p in required if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing required refresh input files:\n" + "\n".join(missing)
+        )
 
 
 # -----------------------------
@@ -790,8 +809,11 @@ def main():
     print(f"  HRS: {HRS_XLSX}")
     print(f"  LBR: {LBR_XLSX}")
     print(f"  SDD: {SDD_XLSX}")
+    print(f"  DB : {DB_PATH}")
+    validate_input_files()
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    INCOMING_DIR.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys=ON;")
